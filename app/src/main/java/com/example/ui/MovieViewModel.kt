@@ -11,6 +11,7 @@ import com.example.data.*
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 class MovieViewModel(application: Application) : AndroidViewModel(application) {
@@ -25,8 +26,16 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
 
     // Sourced Flows
     val watchlistItems: StateFlow<List<WatchlistItem>> = repository.allItemsFlow()
-    val historyItems: StateFlow<List<HistoryItem>> = repository.allHistoryItems
-    val customPlaylists: StateFlow<List<CustomPlaylist>> = repository.allCustomPlaylists
+    val historyItems: StateFlow<List<HistoryItem>> = repository.allHistoryItems.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+    val customPlaylists: StateFlow<List<CustomPlaylist>> = repository.allCustomPlaylists.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     // Local DB Flow Helpers
     private fun MovieRepository.allItemsFlow(): StateFlow<List<WatchlistItem>> {
@@ -68,19 +77,20 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     var activePlayerSeason by mutableStateOf(1)
     var activePlayerEpisode by mutableStateOf(1)
     var activePlayerPoster by mutableStateOf<String?>(null)
+    var activeStreamUrl by mutableStateOf<String?>(null)
 
     // Active Dashboard lists
-    var trendingMovies by mutableStateOf<List<TmdbItem>>(emptyList())
+    var trendingMovies by mutableStateOf<List<TmdbItem>>(MockData.movies)
         private set
-    var popularTvSeries by mutableStateOf<List<TmdbItem>>(emptyList())
+    var popularTvSeries by mutableStateOf<List<TmdbItem>>(MockData.tvSeries)
         private set
-    var nowPlayingMovies by mutableStateOf<List<TmdbItem>>(emptyList())
+    var nowPlayingMovies by mutableStateOf<List<TmdbItem>>(MockData.similarMovies)
         private set
-    var indianCinema by mutableStateOf<List<TmdbItem>>(emptyList())
+    var indianCinema by mutableStateOf<List<TmdbItem>>(MockData.indianCinema)
         private set
-    var animeList by mutableStateOf<List<TmdbItem>>(emptyList())
+    var animeList by mutableStateOf<List<TmdbItem>>(MockData.anime)
         private set
-    var actionBlockbusters by mutableStateOf<List<TmdbItem>>(emptyList())
+    var actionBlockbusters by mutableStateOf<List<TmdbItem>>(MockData.actionBlockbusters)
         private set
     var isDashboardLoading by mutableStateOf(false)
         private set
@@ -109,13 +119,26 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
     fun loadDashboardData() {
         viewModelScope.launch {
             isDashboardLoading = true
-            trendingMovies = repository.getTrendingMovies()
-            popularTvSeries = repository.getPopularTvSeries()
-            nowPlayingMovies = repository.getNowPlayingMovies()
-            indianCinema = repository.getIndianCinema()
-            animeList = repository.getAnime()
-            actionBlockbusters = repository.getActionBlockbusters()
-            isDashboardLoading = false
+            try {
+                // Fetch in parallel using async to maximize speeds and prevent network lag
+                val trendingJob = async { repository.getTrendingMovies() }
+                val tvJob = async { repository.getPopularTvSeries() }
+                val nowPlayingJob = async { repository.getNowPlayingMovies() }
+                val indianJob = async { repository.getIndianCinema() }
+                val animeJob = async { repository.getAnime() }
+                val actionJob = async { repository.getActionBlockbusters() }
+
+                trendingMovies = trendingJob.await()
+                popularTvSeries = tvJob.await()
+                nowPlayingMovies = nowPlayingJob.await()
+                indianCinema = indianJob.await()
+                animeList = animeJob.await()
+                actionBlockbusters = actionJob.await()
+            } catch (e: Exception) {
+                // Keep pre-populated fallback MockData
+            } finally {
+                isDashboardLoading = false
+            }
         }
     }
 
@@ -228,6 +251,12 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         activePlayerTitle = title
         activePlayerMediaType = "movie"
         activePlayerPoster = posterPath
+        activeStreamUrl = when (id) {
+            9901 -> "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+            9902 -> "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.m3u8"
+            9903 -> "https://playertest.longtailvideo.com/adaptive/bipbop/bipbop_all.m3u8"
+            else -> "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.m3u8"
+        }
 
         viewModelScope.launch {
             repository.addToHistory(
@@ -251,6 +280,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         activePlayerSeason = season
         activePlayerEpisode = episode
         activePlayerPoster = posterPath
+        activeStreamUrl = "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.m3u8"
 
         viewModelScope.launch {
             repository.addToHistory(
@@ -319,10 +349,7 @@ class MovieViewModel(application: Application) : AndroidViewModel(application) {
         current.add(0, trimmed)
         val limited = current.take(10)
         recentSearchesList = limited
-        sharedPrefs.edit().putString("recent_searches", MoshiConverterFactory.create().run {
-            // Simply serialize lists with commas, or json string
-            limited.joinToString(",")
-        }).apply()
+        sharedPrefs.edit().putString("recent_searches", limited.joinToString(",")).apply()
     }
 
     fun clearRecentSearches() {

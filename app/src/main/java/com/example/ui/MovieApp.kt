@@ -20,9 +20,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -38,9 +41,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -399,7 +404,7 @@ fun NavigationSidebar(
                 NavigationRailItem(
                     selected = selectedTab == "movies",
                     onClick = { onTabSelected("movies") },
-                    icon = { Icon(Icons.Default.Film, "Movies") },
+                    icon = { Icon(Icons.Default.Movie, "Movies") },
                     label = { Text("Movies", fontSize = 10.sp) },
                     alwaysShowLabel = false,
                     colors = NavigationRailItemDefaults.colors(
@@ -514,7 +519,7 @@ fun BottomNavBar(
         NavigationBarItem(
             selected = selectedTab == "movies",
             onClick = { onTabSelected("movies") },
-            icon = { Icon(Icons.Default.Film, "Movies") },
+            icon = { Icon(Icons.Default.Movie, "Movies") },
             label = { Text("Movies") },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = accentColor,
@@ -1204,13 +1209,6 @@ fun CatalogScreen(viewModel: MovieViewModel, mediaType: String, accentColor: Col
                     }, isWatchlisted = viewModel.isWatchlisted(item.id), onToggleWatchlist = {
                         viewModel.toggleWatchlist(item)
                     }, isDark = isDark, sizeCompact = viewModel.layoutDensity == "compact")
-
-                    // Infinite Scroll triggers:
-                    if (index == items.size - 1 && !viewModel.isDashboardLoading) {
-                        LaunchedEffect(key1 = true) {
-                            viewModel.loadDashboardData()
-                        }
-                    }
                 }
             }
         }
@@ -1535,3 +1533,1028 @@ val qO = listOf(
     GenreInfo(878, "Sci-Fi", "Science Fiction", "https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=120&auto=format&fit=crop&q=60"),
     GenreInfo(53, "Thriller", "Thriller", "https://images.unsplash.com/photo-1509114397022-ed747cca3f65?w=120&auto=format&fit=crop&q=60")
 )
+
+@Composable
+fun DetailBottomSheet(viewModel: MovieViewModel, accentColor: Color, isDark: Boolean) {
+    val details = viewModel.selectedDetailResponse
+    val isTv = viewModel.selectedMediaType == "tv"
+    val textPrimary = if (isDark) Color.White else Color.Black
+    val containerBg = if (isDark) Color(0xFF101216) else Color.White
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.7f))
+            .clickable { viewModel.closeMediaDetails() }
+    ) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f)
+                .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                .background(containerBg)
+                .clickable(enabled = false) {}
+                .padding(bottom = 60.dp)
+        ) {
+            if (viewModel.isDetailLoading || details == null) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = accentColor)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(260.dp)
+                        ) {
+                            val detailImgUrl = if (details.backdropPath != null) {
+                                if (details.backdropPath.startsWith("http")) details.backdropPath else "https://image.tmdb.org/t/p/w780${details.backdropPath}"
+                            } else if (details.posterPath != null) {
+                                if (details.posterPath.startsWith("http")) details.posterPath else "https://image.tmdb.org/t/p/w500${details.posterPath}"
+                            } else {
+                                "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?auto=format&fit=crop&q=80&w=780"
+                            }
+                            AsyncImage(
+                                model = detailImgUrl,
+                                contentDescription = details.title ?: details.name,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Transparent,
+                                                containerBg.copy(alpha = 0.5f),
+                                                containerBg
+                                            )
+                                        )
+                                    )
+                            )
+                            IconButton(
+                                onClick = { viewModel.closeMediaDetails() },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(16.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                            }
+                        }
+                    }
+
+                    item {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = details.title ?: details.name ?: "Untitled",
+                                fontFamily = FontFamily.Serif,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "★ ${details.voteAverage?.let { String.format("%.1f", it) } ?: "8.0"}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = accentColor
+                                )
+                                Text(
+                                    text = details.releaseDate?.take(4) ?: details.firstAirDate?.take(4) ?: "2026",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray
+                                )
+                                Text(
+                                    text = if (isTv) "${details.numberOfSeasons ?: 1} Seasons" else "${details.runtime ?: 120} min",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (isTv) {
+                                            viewModel.playEpisode(details.id, details.name ?: "TV Series", 1, 1, details.posterPath)
+                                        } else {
+                                            viewModel.playMovie(details.id, details.title ?: "Movie", details.posterPath)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f).testTag("detail_play_btn"),
+                                    colors = ButtonDefaults.buttonColors(containerColor = accentColor)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = "Play")
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Play Now")
+                                }
+
+                                val isWatch = viewModel.isWatchlisted(details.id)
+                                OutlinedButton(
+                                    onClick = {
+                                        val tmdbItem = TmdbItem(
+                                            id = details.id,
+                                            title = details.title ?: details.name ?: "Untitled",
+                                            name = details.name,
+                                            posterPath = details.posterPath,
+                                            backdropPath = details.backdropPath,
+                                            voteAverage = details.voteAverage,
+                                            overview = details.overview,
+                                            mediaType = if (isTv) "tv" else "movie"
+                                        )
+                                        viewModel.toggleWatchlist(tmdbItem)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = textPrimary)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isWatch) Icons.Default.Check else Icons.Default.Add,
+                                        contentDescription = "Watchlist"
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(if (isWatch) "In Watchlist" else "Watchlist")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Overview",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = details.overview ?: "No synopsis available.",
+                                fontSize = 14.sp,
+                                color = textPrimary.copy(alpha = 0.8f),
+                                lineHeight = 20.sp
+                            )
+                        }
+                    }
+
+                    val cast = details.credits?.cast
+                    if (cast != null && cast.isNotEmpty()) {
+                        item {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Top Cast",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textPrimary
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    items(cast) { member ->
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.width(80.dp)
+                                        ) {
+                                            val castImgUrl = if (member.profilePath != null) {
+                                                if (member.profilePath.startsWith("http")) member.profilePath else "https://image.tmdb.org/t/p/w185${member.profilePath}"
+                                            } else {
+                                                "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=60"
+                                            }
+                                            AsyncImage(
+                                                model = castImgUrl,
+                                                contentDescription = member.name,
+                                                modifier = Modifier
+                                                    .size(60.dp)
+                                                    .clip(CircleShape),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = member.name ?: "",
+                                                fontSize = 11.sp,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                color = textPrimary
+                                            )
+                                            Text(
+                                                text = member.character ?: "",
+                                                fontSize = 9.sp,
+                                                color = Color.Gray,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (isTv) {
+                        item {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "Seasons & Episodes",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textPrimary
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                for (ep in 1..8) {
+                                    Card(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                            .clickable {
+                                                viewModel.playEpisode(details.id, details.name ?: "TV Series", 1, ep, details.posterPath)
+                                            },
+                                        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1B1D22) else Color(0xFFF0F0F0))
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.PlayCircle,
+                                                contentDescription = "Play",
+                                                tint = accentColor
+                                            )
+                                            Column {
+                                                Text(
+                                                    text = "Episode $ep: Title of Episode $ep",
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = textPrimary
+                                                )
+                                                Text(
+                                                    text = "Season 1 • Ep $ep • 45 min",
+                                                    fontSize = 10.sp,
+                                                    color = Color.Gray
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LivePlayerScreen(viewModel: MovieViewModel, accentColor: Color, isDark: Boolean) {
+    val context = LocalContext.current
+    val streamUrl = viewModel.activeStreamUrl ?: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.m3u8"
+    val title = viewModel.activePlayerTitle
+
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context).build().apply {
+            val mediaItem = MediaItem.fromUri(Uri.parse(streamUrl))
+            setMediaItem(mediaItem)
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    DisposableEffect(key1 = exoPlayer) {
+        onDispose {
+            exoPlayer.release()
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .testTag("player_screen")
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    player = exoPlayer
+                    layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(colors = listOf(Color.Black.copy(alpha = 0.8f), Color.Transparent)))
+                .padding(horizontal = 16.dp, vertical = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                IconButton(
+                    onClick = {
+                        viewModel.activePlayerMediaId = null
+                        viewModel.activeStreamUrl = null
+                    },
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White
+                    )
+                }
+                Column {
+                    Text(
+                        text = title,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        fontFamily = FontFamily.Serif
+                    )
+                    if (viewModel.activePlayerMediaType == "tv") {
+                        Text(
+                            text = "Season ${viewModel.activePlayerSeason} • Episode ${viewModel.activePlayerEpisode}",
+                            color = accentColor,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            text = "Live Stream Video Feed",
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LiveTvScreen(viewModel: MovieViewModel, accentColor: Color, isDark: Boolean) {
+    val context = LocalContext.current
+    val customPlaylists by viewModel.customPlaylists.collectAsStateWithLifecycle(initialValue = emptyList())
+    var selectedPlaylistId by remember { mutableStateOf("jio-tv") }
+    var selectedCategory by remember { mutableStateOf("All") }
+    var showAddPlaylistDialog by remember { mutableStateOf(false) }
+
+    val jioTV = MockData.defaultIpTVPlaylists[0]
+    val jioTVPlus = MockData.defaultIpTVPlaylists[1]
+    val zee5 = MockData.defaultIpTVPlaylists[2]
+
+    val playlists = listOf(
+        Pair("jio-tv", jioTV["name"] ?: "Jio TV"),
+        Pair("jio-tv-plus", jioTVPlus["name"] ?: "Jio TV+"),
+        Pair("zee5-live", zee5["name"] ?: "ZEE5 Live")
+    ) + customPlaylists.map { Pair(it.id, it.name) }
+
+    val activeChannels = when (selectedPlaylistId) {
+        "jio-tv" -> MockData.jioChannels
+        "jio-tv-plus" -> MockData.liveChannels
+        "zee5-live" -> MockData.liveChannels.filter { it["group"] != "Sports" }
+        else -> MockData.liveChannels
+    }
+
+    val categories = listOf("All") + activeChannels.map { it["group"] ?: "Entertainment" }.distinct()
+    val filteredChannels = if (selectedCategory == "All") {
+        activeChannels
+    } else {
+        activeChannels.filter { it["group"] == selectedCategory }
+    }
+
+    val textPrimary = if (isDark) Color.White else Color.Black
+    val surfaceColor = if (isDark) Color(0xFF101216) else Color.White
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Live IPTV Stream TV",
+                    fontFamily = FontFamily.Serif,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontStyle = FontStyle.Italic,
+                    color = accentColor
+                )
+                Text(
+                    text = "Streaming dynamically synced premium playlists",
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+            IconButton(
+                onClick = { showAddPlaylistDialog = true },
+                modifier = Modifier.background(accentColor.copy(alpha = 0.15f), CircleShape)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add custom list", tint = accentColor)
+            }
+        }
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.padding(bottom = 12.dp)
+        ) {
+            items(playlists) { (id, name) ->
+                val isSelected = selectedPlaylistId == id
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        selectedPlaylistId = id
+                        selectedCategory = "All"
+                    },
+                    label = { Text(name, fontSize = 12.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = accentColor,
+                        selectedLabelColor = Color.Black,
+                        containerColor = if (isDark) Color(0xFF1B1D22) else Color(0xFFEBEBEB)
+                    )
+                )
+            }
+        }
+
+        if (categories.size > 1) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                items(categories) { category ->
+                    val isSelected = selectedCategory == category
+                    AssistChip(
+                        onClick = { selectedCategory = category },
+                        label = { Text(category, fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                        colors = AssistChipDefaults.assistChipColors(
+                            containerColor = if (isSelected) accentColor.copy(alpha = 0.2f) else Color.Transparent,
+                            labelColor = if (isSelected) accentColor else textPrimary
+                        ),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (isSelected) accentColor else Color.Gray.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+            }
+        }
+
+        if (filteredChannels.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No channels available.", color = Color.Gray)
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(if (viewModel.layoutDensity == "compact") 3 else 2),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 80.dp)
+            ) {
+                itemsIndexed(filteredChannels) { index, channel ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                viewModel.activePlayerMediaId = 1000 + index
+                                viewModel.activePlayerTitle = channel["name"] ?: "Channel"
+                                viewModel.activePlayerMediaType = "live"
+                                viewModel.activePlayerPoster = channel["logo"]
+                                viewModel.activeStreamUrl = channel["url"]
+                            }
+                            .testTag("channel_card_${index}"),
+                        colors = CardDefaults.cardColors(containerColor = surfaceColor),
+                        border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.15f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(70.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isDark) Color(0xFF1B1D22) else Color(0xFFF7F7F7))
+                                    .padding(8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = channel["logo"],
+                                    contentDescription = channel["name"],
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Fit
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = channel["name"] ?: "",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = channel["group"] ?: "",
+                                fontSize = 9.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showAddPlaylistDialog) {
+            var inputName by remember { mutableStateOf("") }
+            var inputUrl by remember { mutableStateOf("") }
+            var inputLogo by remember { mutableStateOf("") }
+            var inputDesc by remember { mutableStateOf("") }
+
+            AlertDialog(
+                onDismissRequest = { showAddPlaylistDialog = false },
+                title = { Text("Add IPTV Custom Playlist", fontFamily = FontFamily.Serif) },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    ) {
+                        OutlinedTextField(
+                            value = inputName,
+                            onValueChange = { inputName = it },
+                            label = { Text("Playlist Name") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = inputUrl,
+                            onValueChange = { inputUrl = it },
+                            label = { Text("M3U Playlist URL") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = inputLogo,
+                            onValueChange = { inputLogo = it },
+                            label = { Text("Logo Image URL") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = inputDesc,
+                            onValueChange = { inputDesc = it },
+                            label = { Text("Description") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                        onClick = {
+                            if (inputName.isNotBlank() && inputUrl.isNotBlank()) {
+                                viewModel.addCustomPlaylist(
+                                    name = inputName,
+                                    url = inputUrl,
+                                    logo = if (inputLogo.isBlank()) "https://img.icons8.com/color/120/video.png" else inputLogo,
+                                    description = inputDesc
+                                )
+                                showAddPlaylistDialog = false
+                            } else {
+                                Toast.makeText(context, "Please fill in Name and URL", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    ) {
+                        Text("Add", color = Color.Black)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showAddPlaylistDialog = false }) {
+                        Text("Cancel", color = textPrimary)
+                    }
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun ProfileScreen(viewModel: MovieViewModel, accentColor: Color, isDark: Boolean) {
+    val watchlist by viewModel.watchlistItems.collectAsStateWithLifecycle(initialValue = emptyList())
+    val history by viewModel.historyItems.collectAsStateWithLifecycle(initialValue = emptyList())
+    val textPrimary = if (isDark) Color.White else Color.Black
+    val containerBg = if (isDark) Color(0xFF101216) else Color.White
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 24.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Brush.horizontalGradient(listOf(accentColor.copy(alpha = 0.15f), accentColor.copy(alpha = 0.02f))))
+                .border(1.dp, accentColor.copy(alpha = 0.1f), RoundedCornerShape(24.dp))
+                .padding(20.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(accentColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "EP",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 24.sp,
+                        fontFamily = FontFamily.Serif,
+                        color = Color.Black
+                    )
+                }
+                Column {
+                    Text(
+                        text = "ElitePlex Member",
+                        fontFamily = FontFamily.Serif,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = textPrimary
+                    )
+                    Text(
+                        text = "Tier: Premium Streaming VIP",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = accentColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(containerColor = containerBg)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = watchlist.size.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = accentColor)
+                    Text(text = "Watchlist size", fontSize = 11.sp, color = Color.Gray)
+                }
+            }
+            Card(
+                modifier = Modifier.weight(1f),
+                colors = CardDefaults.cardColors(containerColor = containerBg)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(text = history.size.toString(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = accentColor)
+                    Text(text = "Played streams", fontSize = 11.sp, color = Color.Gray)
+                }
+            }
+        }
+
+        Text(
+            text = "Your Watchlist Favorites",
+            fontFamily = FontFamily.Serif,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold,
+            color = textPrimary,
+            modifier = Modifier.padding(bottom = 12.dp)
+        )
+
+        if (watchlist.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(containerBg)
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No items added to watchlist yet.", color = Color.Gray, fontSize = 13.sp)
+            }
+        } else {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.padding(bottom = 24.dp)
+            ) {
+                items(watchlist) { item ->
+                    Card(
+                        modifier = Modifier
+                            .width(110.dp)
+                            .clickable { viewModel.openMediaDetails(item.id, item.mediaType) },
+                        colors = CardDefaults.cardColors(containerColor = containerBg)
+                    ) {
+                        Column {
+                            val watchListImgUrl = if (item.posterPath != null) {
+                                if (item.posterPath.startsWith("http")) item.posterPath else "https://image.tmdb.org/t/p/w320${item.posterPath}"
+                            } else {
+                                "https://images.unsplash.com/photo-1594909122845-11baa439b7bf?auto=format&fit=crop&q=80&w=320"
+                            }
+                            AsyncImage(
+                                model = watchListImgUrl,
+                                contentDescription = item.title,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(150.dp)
+                                    .clip(RoundedCornerShape(12.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = item.title,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Recently Played Streams",
+                fontFamily = FontFamily.Serif,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = textPrimary
+            )
+            if (history.isNotEmpty()) {
+                TextButton(onClick = { viewModel.clearHistory() }) {
+                    Text("Clear All", fontSize = 12.sp, color = accentColor)
+                }
+            }
+        }
+
+        if (history.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(containerBg)
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("No playing history logs recorded.", color = Color.Gray, fontSize = 13.sp)
+            }
+        } else {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 80.dp)
+            ) {
+                history.take(10).forEach { item ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.openMediaDetails(item.mediaId, item.mediaType) },
+                        colors = CardDefaults.cardColors(containerColor = containerBg)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            AsyncImage(
+                                model = item.posterPath ?: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=100&auto=format&fit=crop&q=60",
+                                contentDescription = item.title,
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.title,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = textPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = if (item.mediaType == "tv") "S${item.season} • E${item.episode}" else "Movie Stream",
+                                    fontSize = 10.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Icon(
+                                imageVector = Icons.Default.PlayCircle,
+                                contentDescription = "Play",
+                                tint = accentColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsScreen(viewModel: MovieViewModel, accentColor: Color, isDark: Boolean) {
+    val textPrimary = if (isDark) Color.White else Color.Black
+    val containerBg = if (isDark) Color(0xFF101216) else Color.White
+    val context = LocalContext.current
+
+    val colorsList = listOf(
+        Pair("#D4AF37", "Royal Gold"),
+        Pair("#DF3F5E", "Crimson Red"),
+        Pair("#00FFCC", "Cyber Teal"),
+        Pair("#1E90FF", "Ocean Blue"),
+        Pair("#4CAF50", "Emerald Green")
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        // App settings header
+        Text(
+            text = "ElitePlex Custom Preferences",
+            fontFamily = FontFamily.Serif,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            fontStyle = FontStyle.Italic,
+            color = accentColor,
+            modifier = Modifier.padding(vertical = 16.dp)
+        )
+
+        // Accent choice Row Card
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = containerBg)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Aesthetic Accent Accentuation",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary
+                )
+                Text(
+                    text = "Pick a display highlights scheme hue.",
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    colorsList.forEach { (hex, name) ->
+                        val itemColor = Color(android.graphics.Color.parseColor(hex))
+                        val isSelected = viewModel.accentColor == hex
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(itemColor)
+                                .border(
+                                    width = if (isSelected) 3.dp else 0.dp,
+                                    color = if (isSelected) textPrimary else Color.Transparent,
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    viewModel.updateAccentColor(hex)
+                                }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Theme and density toggles
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = containerBg)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Theme Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(text = "Dark Visual Mode", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                        Text(text = "Reduces strain in ambient environments", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    Switch(
+                        checked = isDark,
+                        onCheckedChange = { viewModel.toggleThemeMode() },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accentColor)
+                    )
+                }
+
+                Divider(color = Color.Gray.copy(alpha = 0.15f))
+
+                // Density preferences
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(text = "High Density Layout Grid", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = textPrimary)
+                        Text(text = "Loads more assets in dense compactness columns", fontSize = 11.sp, color = Color.Gray)
+                    }
+                    val isCompact = viewModel.layoutDensity == "compact"
+                    Switch(
+                        checked = isCompact,
+                        onCheckedChange = { isChecked ->
+                            viewModel.updateLayoutDensity(if (isChecked) "compact" else "default")
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accentColor)
+                    )
+                }
+            }
+        }
+
+        // Advanced mutations
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 80.dp),
+            colors = CardDefaults.cardColors(containerColor = containerBg)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Database Operations",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = textPrimary,
+                    modifier = Modifier.padding(bottom = 6.dp)
+                )
+                Text(
+                    text = "Perform critical storage wipes on the application preferences, IPTV lists and watchlist bookmarks.",
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+                Button(
+                    onClick = {
+                        viewModel.wipeAllData()
+                        Toast.makeText(context, "All data storage wiped", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDF3F5E), contentColor = Color.White)
+                ) {
+                    Icon(Icons.Default.DeleteForever, contentDescription = "Wipe")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Factory Sync Reset")
+                }
+            }
+        }
+    }
+}
