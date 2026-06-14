@@ -1,0 +1,6 @@
+{
+  "name": "ElitePlex",
+  "description": "Stream movies, series, and live TV streams on the premium ElitePlex app with customizable themes, profiles, and media players.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
